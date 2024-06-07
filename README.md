@@ -4,7 +4,7 @@ Sync your custom emojis from Slack to GitLab.
 
 ## Running
 
-- Via docker: `docker build -t emoji_sync . && docker run -it --rm emoji_sync`
+- Via docker: Use the pre-built dockerhub image `mammuth/slack_gitlab_emoji_sync` or build it yourself: `docker build -t emoji_sync . && docker run -it --rm emoji_sync`
 - Via mix: See the section "Development"
 
 **Configuration**
