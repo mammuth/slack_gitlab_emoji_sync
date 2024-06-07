@@ -4,6 +4,7 @@ on:
   workflow_dispatch: # Trigger the action manually from the UI
   push:
     branches: ["main"]
+  pull_request:
 
 jobs:
 
