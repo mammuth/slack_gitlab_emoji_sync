@@ -4,9 +4,13 @@ Sync your custom emojis from Slack to GitLab.
 
 ## Running
 
+- Via docker: `docker build -t emoji_sync . && docker run -it --rm emoji_sync`
+- Via mix: See the section "Development"
+
 **Configuration**
 
 The following variables are available for configuration
+
 | variable | required |
 | -------- | -------- |
 | GITLAB_ACCESS_TOKEN | yes |
@@ -19,7 +23,7 @@ The following variables are available for configuration
 
 - Configure the above env variables
 - Run `mix deps.get`
-- Run `mix` to run the sync
+- Run `mix run` to run the sync
 
 **todo**
 - Dockerize for simpler running
