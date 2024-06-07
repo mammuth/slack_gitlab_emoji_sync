@@ -18,9 +18,7 @@ defmodule EmojiSync.Slack do
     end
   end
 
-  defp api_url do
-    "https://api.slack.com/api/emoji.list"
-  end
+  defp api_url, do: "https://api.slack.com/api/emoji.list"
 
   defp headers do
     token = Application.fetch_env!(:emoji_sync, :slack_access_token)
