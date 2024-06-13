@@ -18,6 +18,24 @@ The following variables are available for configuration
 | SLACK_ACCESS_TOKEN | yes |
 | GITLAB_HOSTNAME | no | 
 
+**Example GitLab pipeline job**
+
+```yml
+slack_gitlab_emoji_sync:
+  image: docker.io/mammuth/slack_gitlab_emoji_sync:latest
+  stage: build
+  before_script:
+    # define those in your pipeline variable settings
+    - export SLACK_ACCESS_TOKEN=$EMOJI_SYNC_SLACK_ACCESS_TOKEN
+    - export GITLAB_ACCESS_TOKEN=$EMOJI_SYNC_GITLAB_ACCESS_TOKEN
+    - export GITLAB_GROUP_PATH=$EMOJI_SYNC_GITLAB_GROUP_PATH
+  script:
+    - cd /app
+    - mix run
+  rules:
+    # optional but let's you create a scheduled pipeline that only runs this job by passing a PIPELINE="slack_gitlab_emoji_sync" env variable
+    - if: '$PIPELINE == "slack_gitlab_emoji_sync"'
+```
 
 ## Development
 
