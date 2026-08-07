@@ -3,11 +3,41 @@ defmodule EmojiSync do
   `EmojiSync` syncs custom emojis from Slack to GitLab.
   """
 
+  require Logger
+
   alias EmojiSync.{GitLab, Slack}
 
+  @doc """
+  Runs the sync. Returns `:ok` or `{:error, reason}`.
+
+  Both tokens are checked before any emoji is uploaded, so an invalid token
+  fails fast instead of producing hundreds of rejected requests.
+  """
   def sync do
-    Slack.get_emojis()
-    |> Enum.each(&GitLab.create_emoji/1)
+    with :ok <- GitLab.verify_access(),
+         {:ok, emojis} <- Slack.get_emojis() do
+      emojis
+      |> Enum.map(&GitLab.create_emoji/1)
+      |> summarize()
+    end
   end
 
+  defp summarize(results) do
+    counts =
+      Enum.frequencies_by(results, fn
+        :ok -> :created
+        :skipped -> :skipped
+        {:error, _reason} -> :failed
+      end)
+
+    created = Map.get(counts, :created, 0)
+    skipped = Map.get(counts, :skipped, 0)
+    failed = Map.get(counts, :failed, 0)
+
+    Logger.info("Sync finished: #{created} created, #{skipped} already existed, #{failed} failed")
+
+    if failed > 0,
+      do: {:error, "#{failed} emoji(s) could not be created in GitLab"},
+      else: :ok
+  end
 end
