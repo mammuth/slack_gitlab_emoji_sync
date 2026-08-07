@@ -18,13 +18,18 @@ The following variables are available for configuration
 | SLACK_ACCESS_TOKEN | yes |
 | GITLAB_HOSTNAME | no | 
 
+**Token permissions**
+
+- `GITLAB_ACCESS_TOKEN`: `api` scope _and_ at least the **Developer** role on the group. A
+  Guest/Reporter token (the default for group access tokens) reads the group fine but gets every
+  upload rejected with `... does not exist or you don't have permission ...`.
+- `SLACK_ACCESS_TOKEN`: `emoji:read` scope.
+
 **Exit code**
 
-The sync exits with code `1` (so a CI job turns red) when:
-
-- the GitLab token is invalid/expired or cannot see `GITLAB_GROUP_PATH` (checked _before_ any upload)
-- the Slack token is invalid/expired or Slack rejects the request
-- GitLab refused to create at least one emoji for an unexpected reason
+The sync exits with code `1` (so a CI job turns red) when a token is invalid or lacks those
+permissions (checked before uploading anything), or when GitLab refused to create an emoji for an
+unexpected reason.
 
 Emojis that already exist in the GitLab group, or whose name collides with a built-in GitLab
 emoji, are logged as skipped and do _not_ fail the run — otherwise every re-run would be red.

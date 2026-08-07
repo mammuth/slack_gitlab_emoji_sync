@@ -2,16 +2,35 @@ defmodule EmojiSync.GitLab do
   require Logger
 
   @doc """
-  Preflight check: verifies that the GitLab token is still valid and that it
-  can see the configured group. Returns `:ok` or `{:error, reason}` so a
-  revoked token fails the sync immediately instead of after hundreds of
-  rejected uploads.
+  Preflight check: verifies that the GitLab token is valid, that it can see the
+  configured group and that it is actually allowed to create custom emojis
+  there. Returns `:ok` or `{:error, reason}`, so a token that is expired or
+  too weak fails the sync immediately instead of after hundreds of rejected
+  uploads.
+
+  Reading the group is not enough: a Guest/Reporter token can read a group but
+  not upload emojis to it, so the same ability the mutation authorizes
+  (`createCustomEmoji`) is checked up front.
   """
   def verify_access do
     case Req.post(url: api_url(), body: verify_payload(), headers: headers()) do
-      {:ok, %{status: 200, body: %{"data" => %{"group" => %{"id" => _}}}}} ->
-        Logger.info("GitLab token is valid and can access group '#{group_path()}'")
+      {:ok,
+       %{
+         status: 200,
+         body: %{"data" => %{"group" => %{"userPermissions" => %{"createCustomEmoji" => true}}}}
+       }} ->
+        Logger.info("GitLab token may create custom emojis in group '#{group_path()}'")
         :ok
+
+      {:ok,
+       %{
+         status: 200,
+         body: %{"data" => %{"group" => %{"userPermissions" => %{"createCustomEmoji" => false}}}}
+       }} ->
+        {:error,
+         "The GitLab token can read group '#{group_path()}' but may not create custom emojis " <>
+           "there. It needs at least the Developer role - a Guest or Reporter token passes every " <>
+           "read but has every upload rejected"}
 
       {:ok, %{status: 200, body: %{"data" => %{"group" => nil}}}} ->
         {:error,
@@ -36,13 +55,26 @@ defmodule EmojiSync.GitLab do
 
   @doc """
   Creates a single custom emoji. Returns `:ok`, `:skipped` (nothing to do, see
-  `@expected_rejections`) or `{:error, reason}`.
+  `@expected_rejections`), `{:error, reason}` for a problem with this one emoji
+  or `{:fatal, reason}` when GitLab refuses in a way that will affect every
+  remaining emoji too.
   """
   def create_emoji(%{name: name, url: url}) do
     case Req.post(url: api_url(), body: payload(name, url), headers: headers()) do
       {:ok, %{status: 200, body: %{"data" => %{"createCustomEmoji" => %{"errors" => []}}}}} ->
         Logger.info("Created emoji '#{name}' successfully in GitLab")
         :ok
+
+      # A top-level GraphQL error means the mutation was rejected outright
+      # (authorization, token scope, ...) rather than the emoji being invalid,
+      # so every following emoji would be rejected the same way.
+      {:ok, %{status: 200, body: %{"errors" => [%{"message" => message} | _]}}} ->
+        {:fatal,
+         "GitLab refused the createCustomEmoji mutation: #{message}. The token needs the 'api' " <>
+           "scope and at least the Developer role on group '#{group_path()}'"}
+
+      {:ok, %{status: 401}} ->
+        {:fatal, "GitLab rejected the access token (401) mid-run - it may have been revoked"}
 
       {:ok, %{status: 200, body: %{"data" => %{"createCustomEmoji" => %{"errors" => errors}}}}} ->
         if expected_rejection?(errors) do
@@ -89,7 +121,11 @@ defmodule EmojiSync.GitLab do
   end
 
   defp verify_payload do
-    %{query: "query { group(fullPath: \"#{group_path()}\") { id } }"} |> Jason.encode!()
+    %{
+      query:
+        "query { group(fullPath: \"#{group_path()}\") { userPermissions { createCustomEmoji } } }"
+    }
+    |> Jason.encode!()
   end
 
   defp payload(name, url) do

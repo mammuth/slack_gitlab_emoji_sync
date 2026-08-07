@@ -16,10 +16,20 @@ defmodule EmojiSync do
   def sync do
     with :ok <- GitLab.verify_access(),
          {:ok, emojis} <- Slack.get_emojis() do
-      emojis
-      |> Enum.map(&GitLab.create_emoji/1)
-      |> summarize()
+      case upload(emojis) do
+        {:fatal, reason} -> {:error, reason}
+        results -> summarize(results)
+      end
     end
+  end
+
+  defp upload(emojis) do
+    Enum.reduce_while(emojis, [], fn emoji, results ->
+      case GitLab.create_emoji(emoji) do
+        {:fatal, reason} -> {:halt, {:fatal, reason}}
+        result -> {:cont, [result | results]}
+      end
+    end)
   end
 
   defp summarize(results) do
