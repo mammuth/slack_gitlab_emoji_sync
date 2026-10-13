@@ -58,7 +58,6 @@ slack_gitlab_emoji_sync:
 **todo**
 - Dockerize for simpler running
 - Understand how to make the config env variables _required_
-- Make it more efficient by also fetching the existing emojis from GitLab and only try creating the diff
 
 ## Known limitations
 GitLab wouldn't be GitLab without a bug or annoyance in every single functionality:    

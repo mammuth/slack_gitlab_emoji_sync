@@ -28,6 +28,36 @@ defmodule EmojiSync.GitLab do
     end
   end
 
+  @doc """
+  Fetches the names of all custom emojis that already exist in the group.
+  GitLab caps GraphQL pages at 100 nodes, so this follows the cursor until the
+  last page. Returns `{:ok, MapSet.t()}` or `{:error, reason}`.
+  """
+  def list_emoji_names, do: list_emoji_names(nil, MapSet.new())
+
+  defp list_emoji_names(cursor, names) do
+    case Req.post(url: api_url(), body: list_payload(cursor), headers: headers()) do
+      {:ok, %{status: 200, body: %{"data" => %{"group" => %{"customEmoji" => emoji}}}}} ->
+        %{"nodes" => nodes, "pageInfo" => page_info} = emoji
+        names = Enum.into(nodes, names, & &1["name"])
+
+        case page_info do
+          %{"hasNextPage" => true, "endCursor" => next} ->
+            list_emoji_names(next, names)
+
+          _ ->
+            Logger.info("Found #{MapSet.size(names)} existing emojis in GitLab")
+            {:ok, names}
+        end
+
+      {:ok, %{status: status, body: body}} ->
+        {:error, "Failed to list GitLab emojis. status: #{status}. body: #{inspect(body)}"}
+
+      {:error, reason} ->
+        {:error, "Request to GitLab failed: #{inspect(reason)}"}
+    end
+  end
+
   # Rejections that every run will keep producing and that no retry can fix:
   # the emoji is already in the group, or its name collides with one of
   # GitLab's built-in emojis. Counting them as failures would turn every
@@ -90,6 +120,22 @@ defmodule EmojiSync.GitLab do
 
   defp verify_payload do
     %{query: "query { group(fullPath: \"#{group_path()}\") { id } }"} |> Jason.encode!()
+  end
+
+  defp list_payload(cursor) do
+    %{
+      query: """
+      query($path: ID!, $after: String) {
+        group(fullPath: $path) {
+          customEmoji(first: 100, after: $after) {
+            nodes { name }
+            pageInfo { hasNextPage endCursor }
+          }
+        }
+      }
+      """,
+      variables: %{path: group_path(), after: cursor}
+    } |> Jason.encode!()
   end
 
   defp payload(name, url) do

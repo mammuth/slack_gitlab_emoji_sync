@@ -15,14 +15,17 @@ defmodule EmojiSync do
   """
   def sync do
     with :ok <- GitLab.verify_access(),
-         {:ok, emojis} <- Slack.get_emojis() do
-      emojis
+         {:ok, emojis} <- Slack.get_emojis(),
+         {:ok, existing} <- GitLab.list_emoji_names() do
+      {present, missing} = Enum.split_with(emojis, &MapSet.member?(existing, &1.name))
+
+      missing
       |> Enum.map(&GitLab.create_emoji/1)
-      |> summarize()
+      |> summarize(length(present))
     end
   end
 
-  defp summarize(results) do
+  defp summarize(results, already_present) do
     counts =
       Enum.frequencies_by(results, fn
         :ok -> :created
@@ -31,7 +34,7 @@ defmodule EmojiSync do
       end)
 
     created = Map.get(counts, :created, 0)
-    skipped = Map.get(counts, :skipped, 0)
+    skipped = Map.get(counts, :skipped, 0) + already_present
     failed = Map.get(counts, :failed, 0)
 
     Logger.info("Sync finished: #{created} created, #{skipped} already existed, #{failed} failed")
