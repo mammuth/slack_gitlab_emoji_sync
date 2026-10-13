@@ -17,11 +17,24 @@ defmodule EmojiSync do
     with :ok <- GitLab.verify_access(),
          {:ok, emojis} <- Slack.get_emojis(),
          {:ok, existing} <- GitLab.list_emoji_names() do
+      emojis = Enum.map(emojis, &rename/1)
+
       {present, missing} = Enum.split_with(emojis, &MapSet.member?(existing, &1.name))
 
       missing
       |> Enum.map(&GitLab.create_emoji/1)
       |> summarize(length(present))
+    end
+  end
+
+  defp rename(%{name: name} = emoji) do
+    case GitLab.normalize_emoji_name(name) do
+      ^name ->
+        emoji
+
+      gitlab_name ->
+        Logger.info("Renaming emoji '#{name}' to '#{gitlab_name}' for GitLab")
+        %{emoji | name: gitlab_name}
     end
   end
 

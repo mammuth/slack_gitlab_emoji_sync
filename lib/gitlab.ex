@@ -58,6 +58,24 @@ defmodule EmojiSync.GitLab do
     end
   end
 
+  # GitLab only accepts names matching /[a-z0-9_-]+/ with at most 36
+  # characters, while Slack also allows longer names and non-ASCII letters.
+  @max_name_length 36
+  @umlauts %{"ä" => "ae", "ö" => "oe", "ü" => "ue", "ß" => "ss"}
+
+  @doc """
+  Maps a Slack emoji name to one GitLab accepts: umlauts are transliterated
+  (`spätzle` -> `spaetzle`), other accents dropped (`café` -> `cafe`) and the
+  result is cut to #{@max_name_length} characters.
+  """
+  def normalize_emoji_name(name) do
+    name
+    |> String.replace(Map.keys(@umlauts), &@umlauts[&1])
+    |> :unicode.characters_to_nfd_binary()
+    |> String.replace(~r/\p{Mn}/u, "")
+    |> String.slice(0, @max_name_length)
+  end
+
   # Rejections that every run will keep producing and that no retry can fix:
   # the emoji is already in the group, or its name collides with one of
   # GitLab's built-in emojis. Counting them as failures would turn every
